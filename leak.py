@@ -607,7 +607,6 @@ def generate_payment_key(amount, admin_id):
                    (key, amount, admin_id))
     conn.commit()
     conn.close()
-
     return key
 
 
@@ -691,6 +690,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_topup(query)
     elif data == "activate_key":
         await handle_activate_key(query)
+
     elif data == "send_complaint":
         await handle_send_complaint(query)
     elif data == "balance":
@@ -704,6 +704,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "skip_screenshots":
         user_id = query.from_user.id
         user_states[user_id]['screenshots'] = json.dumps([])
+    elif data == "admin_panel":
+        await handle_admin_panel(query)
     elif data == "generate_key":
         await handle_generate_key(query)
     elif data == "bot_stats":
@@ -736,7 +738,7 @@ async def handle_generate_key(query):
         await query.edit_message_text("❌ Доступ запрещен!")
         return
 
-    # Запрос суммы для ключа
+    # Устанавливаем состояние ожидания суммы
     user_states[user_id] = {'step': 'waiting_key_amount'}
 
     keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="admin_panel")]]
@@ -744,7 +746,7 @@ async def handle_generate_key(query):
 
     await query.edit_message_text(
         "🔑 Генерация ключа\n\n"
-        "Введите сумму пополнения (число):",
+        "Введите сумму пополнения (число):\n\n",
         reply_markup=reply_markup
     )
 
@@ -890,6 +892,54 @@ async def handle_activate_key(query):
     )
 
 
+async def handle_key_amount_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка ввода суммы для генерации ключа"""
+    user_id = update.effective_user.id
+
+    if user_id not in user_states or user_states[user_id]['step'] != 'waiting_key_amount':
+        return
+
+    try:
+        amount = int(update.message.text.strip())
+
+        if amount <= 0:
+            await update.message.reply_text("❌ Сумма должна быть положительной!")
+            return
+
+        if amount > 100000:  # Максимальная сумма
+            await update.message.reply_text("❌ Слишком большая сумма! Максимум 100,000 звезд")
+            return
+
+        # Генерируем ключ
+        key = generate_payment_key(amount, user_id)
+
+        # Очищаем состояние
+        del user_states[user_id]
+
+        keyboard = [
+            [InlineKeyboardButton("👑 Админ панель", callback_data="admin_panel")],
+            [InlineKeyboardButton("⬅️ Главное меню", callback_data="back_to_main")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.message.reply_text(
+            f"🔑 Ключ успешно создан!\n\n"
+            f"💎 Сумма: {amount} звезд\n"
+            f"🔑 Ключ: `{key}`\n\n"
+            f"📋 Для активации ключа пользователь должен:\n"
+            f"1. Нажать '💎 Пополнить баланс'\n"
+            f"2. Выбрать '🔑 Активировать ключ'\n"
+            f"3. Ввести этот ключ\n\n"
+            f"⏰ Ключ действителен до использования",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+
+    except ValueError:
+        await update.message.reply_text("❌ Введите корректное число!")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка генерации ключа: {e}")
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -901,6 +951,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await handle_target_input(update, context)
         elif state == 'waiting_description':
             await handle_description_input(update, context)
+        elif state == 'waiting_key':
+            await handle_key_input(update, context)
+        elif state == 'waiting_key_amount':  # ← ДОБАВИТЬ ЭТО
+            await handle_key_amount_input(update, context)
 
 
 async def handle_skip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -917,14 +971,10 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("skip", handle_skip_command))
     application.add_handler(CallbackQueryHandler(button_handler))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))  # ← ЭТОТ ОБРАБОТЧИК ДОЛЖЕН БЫТЬ
     application.add_handler(MessageHandler(filters.PHOTO, handle_screenshots))
 
-    print("🔥 Aegis French Fries System ЗАПУЩЕН!")
-    print("💾 База данных подключена")
-    print(f"⭐ Цена за порцию картошки: {PRICE_PER_COMPLAINT} звезд")
-    print(f"👮 Админов: {len(ADMIN_USER_IDS)}")
-
+    print("🔥 Aegis French Fries ЗАПУЩЕН!")
     application.run_polling()
 
 
