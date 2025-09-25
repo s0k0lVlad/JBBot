@@ -906,13 +906,15 @@ async def handle_key_amount_input(update: Update, context: ContextTypes.DEFAULT_
         key = generate_payment_key(amount, user_id)
 
         # Очищаем состояние
-        del user_states[user_id]
-
         keyboard = [
+            [InlineKeyboardButton("🔑 Создать еще ключ", callback_data="generate_key")],
             [InlineKeyboardButton("👑 Админ панель", callback_data="admin_panel")],
             [InlineKeyboardButton("⬅️ Главное меню", callback_data="back_to_main")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
+
+        # Не очищаем состояние - пусть админ продолжает работать
+        # del user_states[user_id]  # ← ЗАКОММЕНТИРУЙ ЭТУ СТРОКУ
 
         await update.message.reply_text(
             f"🔑 Ключ успешно создан!\n\n"
