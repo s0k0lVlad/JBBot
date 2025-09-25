@@ -21,6 +21,18 @@ processing_groups = set()
 user_media_groups = defaultdict(list)
 user_media_timers = {}
 
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('bot.log'),  # Логи в файл
+        logging.StreamHandler()          # Логи в консоль
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
 # ==================== БАЗА ДАННЫХ ====================
 def init_database():
     conn = sqlite3.connect(DATABASE_NAME)
@@ -1041,6 +1053,7 @@ async def handle_skip_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 def main():
+    logger.info("🔥 Aegis French Fries ЗАПУЩЕН!")
     init_database()
 
     application = Application.builder().token(BOT_TOKEN).build()
