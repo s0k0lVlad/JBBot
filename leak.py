@@ -690,13 +690,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_topup(query)
     elif data == "activate_key":
         await handle_activate_key(query)
-
     elif data == "send_complaint":
         await handle_send_complaint(query)
     elif data == "balance":
         await handle_balance(query)
     elif data == "stats":
         await handle_stats(query)
+    elif data == "admin_panel":
+        await handle_admin_panel(query)
     elif data == "back_to_main":
         await start_from_query(query)
     elif data == "back_to_description":
@@ -704,14 +705,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "skip_screenshots":
         user_id = query.from_user.id
         user_states[user_id]['screenshots'] = json.dumps([])
-    elif data == "admin_panel":
-        await handle_admin_panel(query)
     elif data == "generate_key":
         await handle_generate_key(query)
     elif data == "bot_stats":
         await handle_bot_stats(query)
-    elif data == "admin_panel":
-        await handle_admin_panel(query)
     elif data.startswith("complete_"):
         order_id = int(data.replace("complete_", ""))
         await handle_order_complete(query, order_id, context)
