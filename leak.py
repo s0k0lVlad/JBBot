@@ -214,8 +214,40 @@ async def start_from_query(query):
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
+    # ДОБАВЬ ЭТОТ ТЕКСТ:
     await query.edit_message_text(
+        f"🔥 Aegis French Fries приветствует!\n\n"
+        f"⭐ Ваш баланс: {user_data['balance']} звезд\n"
+        f"🎯 Цена за 1 доставку картошки фри: {PRICE_PER_COMPLAINT} звезд\n",
+        reply_markup=reply_markup
     )
+
+
+def get_payment_keys_stats():
+    """Статистика по ключам"""
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT COUNT(*) FROM payment_keys WHERE used = FALSE')
+    active_keys = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM payment_keys WHERE used = TRUE')
+    used_keys = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM payment_keys')
+    total_keys = cursor.fetchone()[0]
+
+    cursor.execute('SELECT SUM(amount) FROM payment_keys WHERE used = FALSE')
+    total_amount = cursor.fetchone()[0] or 0
+
+    conn.close()
+
+    return {
+        'active': active_keys,
+        'used': used_keys,
+        'total': total_keys,
+        'total_amount': total_amount
+    }
 
 
 async def handle_send_complaint(query):
@@ -666,18 +698,69 @@ async def handle_admin_panel(query):
         await query.edit_message_text("❌ Доступ запрещен!")
         return
 
+    keys_stats = get_payment_keys_stats()
+
     keyboard = [
         [InlineKeyboardButton("🔑 Сгенерировать ключ", callback_data="generate_key")],
+        [InlineKeyboardButton("📋 Список ключей", callback_data="list_keys")],
         [InlineKeyboardButton("📊 Статистика бота", callback_data="bot_stats")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await query.edit_message_text(
-        "👑 Админ панель\n\n"
-        "Выберите действие:",
+        f"👑 Админ панель\n\n"
+        f"🔑 Ключи:\n"
+        f"• Активных: {keys_stats['active']}\n"
+        f"• Использовано: {keys_stats['used']}\n"
+        f"• Общая сумма: {keys_stats['total_amount']} звезд\n\n"
+        f"Выберите действие:",
         reply_markup=reply_markup
     )
+
+
+async def handle_list_keys(query):
+    """Показ списка ключей"""
+    user_id = query.from_user.id
+
+    if user_id not in ADMIN_USER_IDS:
+        await query.edit_message_text("❌ Доступ запрещен!")
+        return
+
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+
+    # Активные ключи
+    cursor.execute('SELECT key, amount FROM payment_keys WHERE used = FALSE ORDER BY rowid DESC LIMIT 10')
+    active_keys = cursor.fetchall()
+
+    # Использованные ключи
+    cursor.execute('SELECT key, amount FROM payment_keys WHERE used = TRUE ORDER BY rowid DESC LIMIT 10')
+    used_keys = cursor.fetchall()
+
+    conn.close()
+
+    text = "🔑 Активные ключи:\n"
+    if active_keys:
+        for key, amount in active_keys:
+            text += f"• {key} - {amount} звезд\n"
+    else:
+        text += "Нет активных ключей\n"
+
+    text += "\n📋 Использованные ключи:\n"
+    if used_keys:
+        for key, amount in used_keys:
+            text += f"• {key} - {amount} звезд\n"
+    else:
+        text += "Нет использованных ключей\n"
+
+    keyboard = [
+        [InlineKeyboardButton("👑 Админ панель", callback_data="admin_panel")],
+        [InlineKeyboardButton("⬅️ Главное меню", callback_data="back_to_main")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(text, reply_markup=reply_markup)
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -685,8 +768,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     data = query.data
+    print(f"DEBUG: Нажата кнопка: {data}")  # ← Добавь эту строку
+
 
     if data == "topup":
+        print("DEBUG: Переход в topup")
         await handle_topup(query)
     elif data == "activate_key":
         await handle_activate_key(query)
@@ -699,6 +785,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_panel":
         await handle_admin_panel(query)
     elif data == "back_to_main":
+        print("DEBUG: Обрабатываю back_to_main")
         await start_from_query(query)
     elif data == "back_to_description":
         await handle_back_to_description(query)
@@ -715,6 +802,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("reject_"):
         order_id = int(data.replace("reject_", ""))
         await handle_order_reject(query, order_id, context)
+    elif data == "list_keys":
+        await handle_list_keys(query)
     else:
         await query.edit_message_text("❌ Неизвестная команда!")
 
