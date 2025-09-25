@@ -935,9 +935,11 @@ async def handle_key_amount_input(update: Update, context: ContextTypes.DEFAULT_
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    print(f"DEBUG: Получено сообщение от {user_id}, состояние: {user_states.get(user_id, 'нет состояния')}")  # ← ДОБАВЬ ЭТУ СТРОКУ
 
     if user_id in user_states:
         state = user_states[user_id]['step']
+        print(f"DEBUG: Обрабатываем состояние: {state}")  # ← И ЭТУ
 
         if state == 'waiting_target':
             await handle_target_input(update, context)
@@ -945,7 +947,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await handle_description_input(update, context)
         elif state == 'waiting_key':
             await handle_key_input(update, context)
-        elif state == 'waiting_key_amount':  # ← ДОБАВИТЬ ЭТО
+        elif state == 'waiting_key_amount':
             await handle_key_amount_input(update, context)
 
 
