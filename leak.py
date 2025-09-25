@@ -710,14 +710,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_generate_key(query)
     elif data == "bot_stats":
         await handle_bot_stats(query)
-
-        class TempUpdate:
-            def __init__(self, query):
-                self.effective_user = query.from_user
-                self.message = type('Message', (), {'reply_text': query.edit_message_text})()
-
-        temp_update = TempUpdate(query)
-        await create_complaint_order(temp_update, context, user_id)
     elif data == "admin_panel":
         await handle_admin_panel(query)
     elif data.startswith("complete_"):
@@ -968,11 +960,14 @@ def main():
 
     application = Application.builder().token(BOT_TOKEN).build()
 
+    # Сначала специфические обработчики
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("skip", handle_skip_command))
     application.add_handler(CallbackQueryHandler(button_handler))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))  # ← ЭТОТ ОБРАБОТЧИК ДОЛЖЕН БЫТЬ
-    application.add_handler(MessageHandler(filters.PHOTO, handle_screenshots))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_screenshots))  # Фото сначала!
+
+    # Текстовые сообщения ПОСЛЕДНИМИ
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("🔥 Aegis French Fries ЗАПУЩЕН!")
     application.run_polling()
