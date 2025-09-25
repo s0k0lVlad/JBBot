@@ -183,16 +183,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.message:
         await update.message.reply_text(
-            f"🔥 Добро пожаловать в Aegis French Fries\n\n"
+            f"🔥 Aegis French Fries приветствует!\n\n"
             f"⭐ Ваш баланс: {user_data['balance']} звезд\n"
-            f"🎯 Цена за 1 порцию картошки: {PRICE_PER_COMPLAINT} звезд\n",
+            f"🎯 Цена за 1 доставку картошки фри: {PRICE_PER_COMPLAINT} звезд\n",
             reply_markup=reply_markup
         )
     else:
-        await update.callback_query.edit_message_text(
-            f"🔥 Добро пожаловать в Aegis French Fries\n\n"
-            f"⭐ Ваш баланс: {user_data['balance']} звезд\n"
-            f"🎯 Цена за 1 порцию картошки: {PRICE_PER_COMPLAINT} звезд\n",
+        await update.message.reply_text(
+
             reply_markup=reply_markup
         )
 
@@ -217,10 +215,6 @@ async def start_from_query(query):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await query.edit_message_text(
-        f"🔥 Добро пожаловать в Aegis French Fries\n\n"
-        f"⭐ Ваш баланс: {user_data['balance']} звезд\n"
-        f"🎯 Цена за 1 порцию картошки: {PRICE_PER_COMPLAINT} звезд\n",
-        reply_markup=reply_markup
     )
 
 
@@ -253,7 +247,7 @@ async def handle_send_complaint(query):
 
     await query.edit_message_text(
         "🎯 Заказ картошки фри\n\n"
-        "Отправьте @username или ID пользователя, на которого хотите пожаловаться:\n\n"
+        "Отправьте @username или ID пользователя, которому хотите заказать картошку фри:\n\n"
         "📝 Примеры:\n"
         "• @username - для юзернейма\n"
         "• 123456789 - для ID пользователя\n\n"
@@ -665,6 +659,28 @@ async def handle_key_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         del user_states[user_id]
 
 
+async def handle_admin_panel(query):
+    """Обработка админ панели"""
+    user_id = query.from_user.id
+
+    if user_id not in ADMIN_USER_IDS:
+        await query.edit_message_text("❌ Доступ запрещен!")
+        return
+
+    keyboard = [
+        [InlineKeyboardButton("🔑 Сгенерировать ключ", callback_data="generate_key")],
+        [InlineKeyboardButton("📊 Статистика бота", callback_data="bot_stats")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        "👑 Админ панель\n\n"
+        "Выберите действие:",
+        reply_markup=reply_markup
+    )
+
+
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -678,18 +694,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "send_complaint":
         await handle_send_complaint(query)
     elif data == "balance":
-        await handle_balance(query)  # ← ОБНОВЛЕНО
+        await handle_balance(query)
     elif data == "stats":
-        await handle_stats(query)  # ← ОБНОВЛЕНО
+        await handle_stats(query)
     elif data == "back_to_main":
         await start_from_query(query)
     elif data == "back_to_description":
-        await handle_back_to_description(query)  # ← ДОБАВЛЕНО
+        await handle_back_to_description(query)
     elif data == "skip_screenshots":
         user_id = query.from_user.id
         user_states[user_id]['screenshots'] = json.dumps([])
+    elif data == "generate_key":
+        await handle_generate_key(query)
+    elif data == "bot_stats":
+        await handle_bot_stats(query)
 
-        # Создаем временный update объект для передачи в create_complaint_order
         class TempUpdate:
             def __init__(self, query):
                 self.effective_user = query.from_user
@@ -697,6 +716,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         temp_update = TempUpdate(query)
         await create_complaint_order(temp_update, context, user_id)
+    elif data == "admin_panel":
+        await handle_admin_panel(query)
     elif data.startswith("complete_"):
         order_id = int(data.replace("complete_", ""))
         await handle_order_complete(query, order_id, context)
@@ -705,6 +726,70 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_order_reject(query, order_id, context)
     else:
         await query.edit_message_text("❌ Неизвестная команда!")
+
+
+async def handle_generate_key(query):
+    """Генерация ключа пополнения"""
+    user_id = query.from_user.id
+
+    if user_id not in ADMIN_USER_IDS:
+        await query.edit_message_text("❌ Доступ запрещен!")
+        return
+
+    # Запрос суммы для ключа
+    user_states[user_id] = {'step': 'waiting_key_amount'}
+
+    keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="admin_panel")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        "🔑 Генерация ключа\n\n"
+        "Введите сумму пополнения (число):",
+        reply_markup=reply_markup
+    )
+
+
+async def handle_bot_stats(query):
+    """Статистика бота"""
+    user_id = query.from_user.id
+
+    if user_id not in ADMIN_USER_IDS:
+        await query.edit_message_text("❌ Доступ запрещен!")
+        return
+
+    conn = sqlite3.connect(DATABASE_NAME)
+    cursor = conn.cursor()
+
+    # Статистика пользователей
+    cursor.execute('SELECT COUNT(*) FROM users')
+    total_users = cursor.fetchone()[0]
+
+    cursor.execute('SELECT SUM(balance) FROM users')
+    total_balance = cursor.fetchone()[0] or 0
+
+    cursor.execute('SELECT COUNT(*) FROM orders')
+    total_orders = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM orders WHERE status = "completed"')
+    completed_orders = cursor.fetchone()[0]
+
+    cursor.execute('SELECT COUNT(*) FROM orders WHERE status = "pending"')
+    pending_orders = cursor.fetchone()[0]
+
+    conn.close()
+
+    keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="admin_panel")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        f"📊 Статистика бота\n\n"
+        f"👥 Всего пользователей: {total_users}\n"
+        f"💎 Общий баланс: {total_balance} звезд\n"
+        f"📦 Всего заказов: {total_orders}\n"
+        f"✅ Выполнено: {completed_orders}\n"
+        f"⏳ Ожидают: {pending_orders}",
+        reply_markup=reply_markup
+    )
 
 
 async def handle_balance(query):
@@ -781,7 +866,7 @@ async def handle_topup(query):
     await query.edit_message_text(
         "💎 Пополнение баланса\n\n"
         "🔑 Активировать ключ - ввести промокод для пополнения баланса\n\n"
-        "Для получение ключа необходимо обратиться к @aegis_def",
+        "Для покупки ключа необходимо обратиться к @aegis_def",
         reply_markup=reply_markup
     )
 
